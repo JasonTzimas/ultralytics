@@ -124,6 +124,8 @@ class BaseTrainer:
         """
         self.hub_session = overrides.pop("session", None)  # HUB
         self.args = get_cfg(cfg, overrides)
+        LOGGER.info(f"Unfreezing BatchNorm layers: {self.args.unfreeze_bn}")
+        
         self.check_resume(overrides)
         self.device = select_device(self.args.device)
         # Update "-1" devices so post-training val does not repeat search
@@ -313,7 +315,7 @@ class BaseTrainer:
         self.freeze_layer_names = freeze_layer_names
         for k, v in self.model.named_parameters():
             # v.register_hook(lambda x: torch.nan_to_num(x))  # NaN to 0 (commented for erratic training results)
-            if any(x in k for x in freeze_layer_names):
+            if any(x in k and not (self.args.unfreeze_bn and "bn" in k) for x in freeze_layer_names ):
                 LOGGER.info(f"Freezing layer '{k}'")
                 v.requires_grad = False
             elif not v.requires_grad and v.dtype.is_floating_point:  # only floating point Tensor can require gradients
@@ -322,6 +324,7 @@ class BaseTrainer:
                     "See ultralytics.engine.trainer for customization of frozen layers."
                 )
                 v.requires_grad = True
+            print("Module: ", k, " requires_grad: ", v.requires_grad)
 
         # Check AMP
         self.amp = torch.tensor(self.args.amp).to(self.device)  # True or False

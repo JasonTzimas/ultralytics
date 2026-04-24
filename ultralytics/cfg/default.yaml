@@ -132,3 +132,8 @@ cfg: # (str, optional) path to a config.yaml that overrides defaults
 
 # Tracker settings ------------------------------------------------------------------------------------------------------
 tracker: botsort.yaml # (str) tracker config file: botsort.yaml or bytetrack.yaml
+
+# Fine tunning
+unfreeze_bn: False # (bool) whether to unfreeze BatchNorm layers during training; may improve performance when True
+unfreeze_bn_and_bias: False # (bool) whether to unfreeze both BatchNorm layers and bias parameters during training; may improve performance when True
+lrs_per_layer: None # (dict, optional) learning rates for each layer during training

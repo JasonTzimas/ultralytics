@@ -226,6 +226,8 @@ CFG_INT_KEYS = frozenset(
 )
 CFG_BOOL_KEYS = frozenset(
     {  # boolean-only arguments
+        "unfreeze_bn_and_bias",
+        "unfreeze_bn",
         "save",
         "exist_ok",
         "verbose",
@@ -322,7 +324,7 @@ def get_cfg(
         - The function performs type and value checks on the configuration data.
     """
     cfg = cfg2dict(cfg)
-
+    LOGGER.info(f"cfg: {cfg} with overrides: {overrides}")  # log the initial cfg and overrides for debugging
     # Merge overrides
     if overrides:
         overrides = cfg2dict(overrides)

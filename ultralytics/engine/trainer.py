@@ -315,7 +315,7 @@ class BaseTrainer:
         self.freeze_layer_names = freeze_layer_names
         for k, v in self.model.named_parameters():
             # v.register_hook(lambda x: torch.nan_to_num(x))  # NaN to 0 (commented for erratic training results)
-            if any(x in k and not (self.args.unfreeze_bn and "bn" in k) for x in freeze_layer_names ):
+            if any(x in k and not (self.args.unfreeze_bn and "bn" in k) and not (self.args.unfreeze_bn_and_bias and ("bn" in k or "bias" in k)) for x in freeze_layer_names ):
                 LOGGER.info(f"Freezing layer '{k}'")
                 v.requires_grad = False
             elif not v.requires_grad and v.dtype.is_floating_point:  # only floating point Tensor can require gradients

@@ -137,3 +137,4 @@ tracker: botsort.yaml # (str) tracker config file: botsort.yaml or bytetrack.yam
 unfreeze_bn: False # (bool) whether to unfreeze BatchNorm layers during training; may improve performance when True
 unfreeze_bn_and_bias: False # (bool) whether to unfreeze both BatchNorm layers and bias parameters during training; may improve performance when True
 lrs_per_layer: None # (dict, optional) learning rates for each layer during training
+convLora: False # (bool) whether to apply LoRA fine-tuning to convolutional layers; may improve performance when True

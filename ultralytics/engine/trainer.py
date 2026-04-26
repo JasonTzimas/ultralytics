@@ -1011,9 +1011,7 @@ class BaseTrainer:
             for param_name, param in module.named_parameters(recurse=False):
                 fullname = f"{module_name}.{param_name}" if module_name else param_name
                 layer = int(fullname.split(".")[1])
-                if layer not in self.args.lrs_per_layer.keys():
-                    LOGGER.info(f"Adding module {fullname} as it is layer {layer}")
-
+                if self.args.lrs_per_layer is not None and layer not in self.args.lrs_per_layer.keys():
                     if param.ndim >= 2 and use_muon:
                         g[3][fullname] = param  # muon params
                     elif "bias" in fullname:  # bias (no decay)
@@ -1023,8 +1021,7 @@ class BaseTrainer:
                         g[1][fullname] = param
                     else:  # weight (with decay)
                         g[0][fullname] = param
-                else:
-                    LOGGER.info(f"Skipping module {fullname} as it is layer {layer}")
+
         if not use_muon:
             g = [x.values() for x in g[:3]]  # convert to list of params
 
@@ -1064,39 +1061,36 @@ class BaseTrainer:
         optimizer = getattr(optim, name, partial(MuSGD, muon=muon, sgd=sgd))(params=g)
 
         # Layer specific param_groups
-        layer_groups = [{} for _ in range(len(self.args.lrs_per_layer) * 3)]
-        layer2idx = {int(layer): 3 * i for i, layer in enumerate(self.args.lrs_per_layer.keys())}
-        for module_name, module in unwrap_model(model).named_modules():
-            for param_name, param in module.named_parameters(recurse=False):
-                fullname = f"{module_name}.{param_name}" if module_name else param_name
-                layer = int(fullname.split(".")[1])
-                if layer in self.args.lrs_per_layer.keys():
-                    LOGGER.info(f"Adding module {fullname} to layer group {layer} with lr {self.args.lrs_per_layer[layer]}")
-                    if "bias" in fullname:  # bias (no decay)
-                        layer_groups[layer2idx[layer] + 2][fullname] = param
-                    elif isinstance(module, bn) or "logit_scale" in fullname:  # weight (no decay)
-                        # ContrastiveHead and BNContrastiveHead included here with 'logit_scale'
-                        layer_groups[layer2idx[layer] + 1][fullname] = param
-                    else:  # weight (with decay)
-                        layer_groups[layer2idx[layer] + 0][fullname] = param
-                else:
-                    LOGGER.info(f"Skipping module {fullname} as it is not in the specified layers LAYER: {layer}")
+        if self.args.lrs_per_layer is not None:
+            layer_groups = [{} for _ in range(len(self.args.lrs_per_layer) * 3)]
+            layer2idx = {int(layer): 3 * i for i, layer in enumerate(self.args.lrs_per_layer.keys())}
+            for module_name, module in unwrap_model(model).named_modules():
+                for param_name, param in module.named_parameters(recurse=False):
+                    fullname = f"{module_name}.{param_name}" if module_name else param_name
+                    layer = int(fullname.split(".")[1])
+                    if layer in self.args.lrs_per_layer.keys():
+                        if "bias" in fullname:  # bias (no decay)
+                            layer_groups[layer2idx[layer] + 2][fullname] = param
+                        elif isinstance(module, bn) or "logit_scale" in fullname:  # weight (no decay)
+                            # ContrastiveHead and BNContrastiveHead included here with 'logit_scale'
+                            layer_groups[layer2idx[layer] + 1][fullname] = param
+                        else:  # weight (with decay)
+                            layer_groups[layer2idx[layer] + 0][fullname] = param
 
-        print("LAYER 2 INDEX: ", layer2idx)
-        for layer, layer_lr in self.args.lrs_per_layer.items():
-            idx = layer2idx[layer]
-            if name in {"Adam", "Adamax", "AdamW", "NAdam", "RAdam"}:
-                optim_args = dict(lr=layer_lr, betas=(momentum, 0.999), weight_decay=0.0)
-            elif name == "RMSProp":
-                optim_args = dict(lr=layer_lr, momentum=momentum)
-            elif name == "SGD" or name == "MuSGD":
-                optim_args = dict(lr=layer_lr, momentum=momentum, nesterov=True)
-            layer_groups[idx + 2] = {"params": layer_groups[idx + 2].values(), **optim_args, "param_group": f"layer-{layer}-bias"}
-            layer_groups[idx + 0] = {"params": layer_groups[idx + 0].values(), **optim_args, "weight_decay": decay, "param_group": f"layer-{layer}-weight"}
-            layer_groups[idx + 1] = {"params": layer_groups[idx + 1].values(), **optim_args, "weight_decay": 0.0, "param_group": f"layer-{layer}-bn"}
-            optimizer.add_param_group(layer_groups[idx + 2])
-            optimizer.add_param_group(layer_groups[idx + 0])
-            optimizer.add_param_group(layer_groups[idx + 1])
+            for layer, layer_lr in self.args.lrs_per_layer.items():
+                idx = layer2idx[layer]
+                if name in {"Adam", "Adamax", "AdamW", "NAdam", "RAdam"}:
+                    optim_args = dict(lr=layer_lr, betas=(momentum, 0.999), weight_decay=0.0)
+                elif name == "RMSProp":
+                    optim_args = dict(lr=layer_lr, momentum=momentum)
+                elif name == "SGD" or name == "MuSGD":
+                    optim_args = dict(lr=layer_lr, momentum=momentum, nesterov=True)
+                layer_groups[idx + 2] = {"params": layer_groups[idx + 2].values(), **optim_args, "param_group": f"layer-{layer}-bias"}
+                layer_groups[idx + 0] = {"params": layer_groups[idx + 0].values(), **optim_args, "weight_decay": decay, "param_group": f"layer-{layer}-weight"}
+                layer_groups[idx + 1] = {"params": layer_groups[idx + 1].values(), **optim_args, "weight_decay": 0.0, "param_group": f"layer-{layer}-bn"}
+                optimizer.add_param_group(layer_groups[idx + 2])
+                optimizer.add_param_group(layer_groups[idx + 0])
+                optimizer.add_param_group(layer_groups[idx + 1])
 
         print("Optimizer: ")
         for i, param_group in enumerate(optimizer.param_groups):

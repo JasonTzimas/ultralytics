@@ -1011,7 +1011,18 @@ class BaseTrainer:
             for param_name, param in module.named_parameters(recurse=False):
                 fullname = f"{module_name}.{param_name}" if module_name else param_name
                 layer = int(fullname.split(".")[1])
-                if self.args.lrs_per_layer is not None and layer not in self.args.lrs_per_layer.keys():
+                if self.args.lrs_per_layer is not None:
+                    if layer not in self.args.lrs_per_layer.keys():
+                        if param.ndim >= 2 and use_muon:
+                            g[3][fullname] = param  # muon params
+                        elif "bias" in fullname:  # bias (no decay)
+                            g[2][fullname] = param
+                        elif isinstance(module, bn) or "logit_scale" in fullname:  # weight (no decay)
+                            # ContrastiveHead and BNContrastiveHead included here with 'logit_scale'
+                            g[1][fullname] = param
+                        else:  # weight (with decay)
+                            g[0][fullname] = param
+                else:
                     if param.ndim >= 2 and use_muon:
                         g[3][fullname] = param  # muon params
                     elif "bias" in fullname:  # bias (no decay)
@@ -1021,6 +1032,7 @@ class BaseTrainer:
                         g[1][fullname] = param
                     else:  # weight (with decay)
                         g[0][fullname] = param
+
 
         if not use_muon:
             g = [x.values() for x in g[:3]]  # convert to list of params
